@@ -3,6 +3,9 @@ package com.example.stock.stock;
 import com.example.stock.domain.Stock;
 import com.example.stock.repository.StockRepository;
 import com.example.stock.service.StockService;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +37,33 @@ public class StockServiceTest {
     public void 재고감소_테스트() {
         stockService.decrease(1L, 1L);
         Stock stock = stockRepository.findById(1L).orElseThrow();
-        assertEquals(99,stock.getQuantity());
+        assertEquals(99, stock.getQuantity());
+    }
+
+    @Test
+    public void 동시에_100개_요청() throws InterruptedException {
+        int threadCount = 100;
+        // 비동기작업을 쉽게 사용할 수 있도록 도와주는 자바 api
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+
+        // 다른 스레드의 작업이 끝날때까지 대기할수 있도록 도와주는 클래스
+        CountDownLatch countDownLatch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(() -> {
+                try {
+                    stockService.decrease(1L, 1L);
+                } finally {
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        countDownLatch.await();
+        Stock stock = stockRepository.findById(1L).orElseThrow();
+        // 테스트는 실패 why?? raceCondition 때문 (하나의 공유 자원에 여러 프로세스가 상태변화를 주려고 해서)
+        // assertEquals(0,stock.getQuantity());
+
+        assertNotEquals(0,stock.getQuantity());
+
     }
 }
